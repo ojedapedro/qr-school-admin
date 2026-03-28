@@ -9,6 +9,7 @@ export function Auth() {
   const { user, appUser, loading } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const login = async () => {
     setIsLoggingIn(true);
@@ -155,11 +156,6 @@ export function Auth() {
                 Ingresar con Google
               </button>
 
-  const [showDebug, setShowDebug] = useState(false);
-
-  const login = async () => {
-// ... (código anterior)
-// ...
               {error && (
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
