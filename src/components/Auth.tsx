@@ -1,21 +1,28 @@
 import { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
-import { LogIn, LogOut, ShieldCheck, User as UserIcon, Loader2, Eye, EyeOff, CheckCircle2, TrendingUp, Users } from 'lucide-react';
+import { LogIn, LogOut, ShieldCheck, User as UserIcon, Loader2, Eye, EyeOff, CheckCircle2, TrendingUp, Users, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'motion/react';
 
 export function Auth() {
   const { user, appUser, loading } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const login = async () => {
     setIsLoggingIn(true);
+    setError(null);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setError('Este dominio no está autorizado en Firebase. Por favor, añade los dominios de AI Studio a la lista de dominios autorizados en tu consola de Firebase.');
+      } else {
+        setError('Error al iniciar sesión. Por favor, intenta de nuevo.');
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -143,6 +150,17 @@ export function Auth() {
                 {isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : <LogIn size={20} />}
                 Ingresar con Google
               </button>
+
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-bold flex items-start gap-3"
+                >
+                  <AlertCircle className="shrink-0" size={18} />
+                  <p>{error}</p>
+                </motion.div>
+              )}
             </div>
 
             <div className="flex items-center gap-4 text-brand-text-muted text-sm">
