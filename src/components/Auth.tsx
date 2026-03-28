@@ -18,10 +18,14 @@ export function Auth() {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error('Login error:', error);
+      const currentDomain = window.location.hostname;
+      
       if (error.code === 'auth/unauthorized-domain') {
-        setError('Este dominio no está autorizado en Firebase. Por favor, añade los dominios de AI Studio a la lista de dominios autorizados en tu consola de Firebase.');
+        setError(`El dominio "${currentDomain}" no está autorizado en Firebase. Por favor, verifica que aparezca exactamente así en la lista de "Dominios autorizados" de tu consola de Firebase.`);
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setError('El inicio de sesión con Google no está habilitado. Por favor, actívalo en la consola de Firebase (Authentication > Sign-in method).');
       } else {
-        setError('Error al iniciar sesión. Por favor, intenta de nuevo.');
+        setError(`Error de autenticación (${error.code}): ${error.message}`);
       }
     } finally {
       setIsLoggingIn(false);
