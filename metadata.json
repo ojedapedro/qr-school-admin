@@ -1,0 +1,5 @@
+{
+  "name": "QR-School-Admin",
+  "description": "Sistema Integrado de Control de Pagos y Asistencia Escolar con escaneo de códigos QR.",
+  "requestFramePermissions": ["camera"]
+}

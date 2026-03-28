@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - email: string (required) - User email
+    //   - role: string (required, enum: admin|teacher|student) - User role
+    //
+    // Collection: students
+    // Document ID: auto-generated
+    // Fields:
+    //   - id: string (required) - Unique student ID
+    //   - name: string (required) - Full name
+    //   - email: string (optional) - Student email for login
+    //   - grade: string (required) - Grade level
+    //   - paymentStatus: string (required, enum: Solvente|Mora) - Payment status
+    //   - createdAt: string (required, ISO 8601) - Registration date
+    //
+    // Collection: attendance
+    // Document ID: auto-generated
+    // Fields:
+    //   - studentId: string (required) - ID of the student
+    //   - studentName: string (required) - Name of the student
+    //   - grade: string (required) - Grade of the student
+    //   - timestamp: string (required, ISO 8601) - Scan time
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') || 
+          (request.auth.token.email == "ojeda.pedro2302@gmail.com" && request.auth.token.email_verified == true)
+        );
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' || 
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')) || 
+          isAdmin()
+        );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['admin', 'teacher', 'student'];
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['id', 'name', 'grade', 'paymentStatus', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.name is string && data.name.size() > 0 &&
+             data.grade is string && data.grade.size() > 0 &&
+             data.paymentStatus in ['Solvente', 'Mora'] &&
+             data.createdAt is string &&
+             (!('email' in data) || data.email is string);
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'grade', 'timestamp']) &&
+             data.studentId is string &&
+             data.studentName is string &&
+             data.grade is string &&
+             data.timestamp is string;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'amount', 'month', 'date', 'recordedBy']) &&
+             data.studentId is string &&
+             data.studentName is string &&
+             data.amount is number &&
+             data.month is string &&
+             data.date is string &&
+             data.recordedBy is string;
+    }
+
+    // Rules for Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+    }
+
+    // Rules for Students collection
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidStudent(request.resource.data);
+      allow update: if isAdmin() && isValidStudent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Attendance collection
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create: if isTeacher() && isValidAttendance(request.resource.data);
+      allow update: if isAdmin() && isValidAttendance(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidPayment(request.resource.data);
+      allow update: if isAdmin() && isValidPayment(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

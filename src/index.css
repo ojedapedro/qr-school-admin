@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-bg: #0a0b14;
+  --color-brand-card: #151624;
+  --color-brand-accent: #7c73e6;
+  --color-brand-text-muted: #8e9299;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-white font-sans antialiased selection:bg-brand-accent/30;
+  }
+}
+
+.glass-card {
+  @apply bg-brand-card/50 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl;
+}
+
+.brand-button {
+  @apply bg-brand-accent hover:bg-brand-accent/90 text-white font-black uppercase tracking-widest py-4 px-8 rounded-2xl transition-all active:scale-95 shadow-xl shadow-brand-accent/20 disabled:opacity-50 disabled:pointer-events-none;
+}
+
+.brand-input {
+  @apply bg-brand-card/80 border border-white/5 text-white px-5 py-4 rounded-2xl focus:ring-2 focus:ring-brand-accent focus:border-transparent outline-none transition-all placeholder:text-brand-text-muted font-bold;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}

@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student in the school.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique student ID." },
+        "name": { "type": "string", "description": "Full name of the student." },
+        "email": { "type": "string", "description": "Student email for login." },
+        "grade": { "type": "string", "description": "Grade or level of the student." },
+        "paymentStatus": { "type": "string", "enum": ["Solvente", "Mora"], "description": "Current payment status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the student was registered." }
+      },
+      "required": ["id", "name", "grade", "paymentStatus"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Represents a daily attendance record.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "ID of the student." },
+        "studentName": { "type": "string", "description": "Name of the student at the time of scan." },
+        "grade": { "type": "string", "description": "Grade of the student." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the scan occurred." }
+      },
+      "required": ["studentId", "studentName", "grade", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Represents a system user (Admin, Teacher or Student).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID." },
+        "email": { "type": "string", "description": "User email." },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student"], "description": "User role." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Represents a payment record.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "ID of the student." },
+        "studentName": { "type": "string", "description": "Name of the student." },
+        "amount": { "type": "number", "description": "Amount paid." },
+        "month": { "type": "string", "description": "Month or concept covered." },
+        "date": { "type": "string", "format": "date-time", "description": "When the payment was recorded." },
+        "recordedBy": { "type": "string", "description": "Name or email of the admin who recorded it." }
+      },
+      "required": ["studentId", "studentName", "amount", "month", "date", "recordedBy"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of students."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Daily attendance records."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "System users and their roles."
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment history records."
+    }
+  }
+}
