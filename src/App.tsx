@@ -6,6 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { AttendanceStats } from './components/AttendanceStats';
 import { PaymentModule } from './components/PaymentModule';
 import { StudentProfile } from './components/StudentProfile';
+import { MoraReport } from './components/MoraReport';
 import { 
   LayoutDashboard, 
   QrCode, 
@@ -23,7 +24,7 @@ import { cn } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { InstallPWA } from './components/InstallPWA';
 
-type View = 'admin' | 'scanner' | 'stats' | 'payments' | 'profile';
+type View = 'admin' | 'scanner' | 'stats' | 'payments' | 'profile' | 'mora-report';
 
 export default function App() {
   const { user, appUser, studentData, loading } = useAuth();
@@ -193,7 +194,23 @@ export default function App() {
             {activeView === 'admin' && isAdmin && (
               <AdminDashboard onNavigateToPayments={() => setActiveView('payments')} />
             )}
-            {activeView === 'stats' && <AttendanceStats />}
+            {activeView === 'stats' && (
+              <div className="space-y-6">
+                <div className="flex justify-end">
+                  <button 
+                    onClick={() => setActiveView('mora-report')}
+                    className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 px-6 py-3 rounded-2xl hover:bg-red-500/20 transition-all active:scale-95 font-bold shadow-lg"
+                  >
+                    <BarChart3 size={20} />
+                    Reporte de Mora
+                  </button>
+                </div>
+                <AttendanceStats />
+              </div>
+            )}
+            {activeView === 'mora-report' && (
+              <MoraReport onBack={() => setActiveView('stats')} />
+            )}
             {activeView === 'profile' && studentData && (
               <StudentProfile student={studentData} />
             )}
