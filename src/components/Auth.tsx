@@ -155,14 +155,36 @@ export function Auth() {
                 Ingresar con Google
               </button>
 
+  const [showDebug, setShowDebug] = useState(false);
+
+  const login = async () => {
+// ... (código anterior)
+// ...
               {error && (
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-bold flex items-start gap-3"
+                  className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-bold flex flex-col gap-3"
                 >
-                  <AlertCircle className="shrink-0" size={18} />
-                  <p>{error}</p>
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="shrink-0" size={18} />
+                    <p>{error}</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="text-[10px] uppercase tracking-widest opacity-50 hover:opacity-100 transition-opacity underline text-left"
+                  >
+                    {showDebug ? 'Ocultar Diagnóstico' : 'Ver Diagnóstico Técnico'}
+                  </button>
+                  
+                  {showDebug && (
+                    <div className="mt-2 p-3 bg-black/20 rounded-lg font-mono text-[10px] break-all space-y-1 text-red-300/80">
+                      <p>DOMINIO ACTUAL: {window.location.hostname}</p>
+                      <p>PROJECT_ID: {auth.app.options.projectId}</p>
+                      <p>API_KEY: {auth.app.options.apiKey?.substring(0, 10)}...</p>
+                      <p>AUTH_DOMAIN: {auth.app.options.authDomain}</p>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </div>
