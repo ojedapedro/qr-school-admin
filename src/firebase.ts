@@ -5,23 +5,36 @@ import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 // In this environment, the config is provided in firebase-applet-config.json
 import firebaseConfig from '../firebase-applet-config.json';
 
+console.log('Firebase Config loaded:', {
+  projectId: firebaseConfig.projectId,
+  databaseId: firebaseConfig.firestoreDatabaseId,
+  hasApiKey: !!firebaseConfig.apiKey
+});
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Handle default database ID correctly
-export const db = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId) 
-  : getFirestore(app);
+const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' 
+  ? firebaseConfig.firestoreDatabaseId 
+  : undefined;
+
+export const db = getFirestore(app, databaseId);
 
 // Test connection to Firestore
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline, which usually indicates an incorrect Project ID or API Key in firebase-applet-config.json.");
+    console.log('Testing Firestore connection to database:', databaseId || '(default)');
+    const testDoc = await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log('Firestore connection test successful');
+  } catch (error: any) {
+    console.error("Firestore connection test failed:", error.message);
+    if(error.message.includes('the client is offline')) {
+      console.error("CRITICAL: The client is offline. This usually means the Project ID, API Key, or Database ID is incorrect in firebase-applet-config.json.");
     }
-    // Skip logging for other errors, as this is simply a connection test.
+    if(error.message.includes('not found')) {
+      console.error("CRITICAL: The database was not found. Check if the firestoreDatabaseId is correct.");
+    }
   }
 }
 testConnection();
