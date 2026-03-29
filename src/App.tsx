@@ -7,6 +7,7 @@ import { AttendanceStats } from './components/AttendanceStats';
 import { PaymentModule } from './components/PaymentModule';
 import { StudentProfile } from './components/StudentProfile';
 import { MoraReport } from './components/MoraReport';
+import { UserManagement } from './components/UserManagement';
 import { 
   LayoutDashboard, 
   QrCode, 
@@ -24,7 +25,7 @@ import { cn } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { InstallPWA } from './components/InstallPWA';
 
-type View = 'admin' | 'scanner' | 'stats' | 'payments' | 'profile' | 'mora-report';
+type View = 'admin' | 'scanner' | 'stats' | 'payments' | 'profile' | 'mora-report' | 'users';
 
 export default function App() {
   const { user, appUser, studentData, loading } = useAuth();
@@ -79,6 +80,7 @@ export default function App() {
     { id: 'scanner', label: 'Escáner', icon: QrCode, roles: ['admin', 'teacher'] },
     { id: 'payments', label: 'Pagos', icon: CreditCard, roles: ['admin'] },
     { id: 'admin', label: 'Alumnos', icon: Users, roles: ['admin'] },
+    { id: 'users', label: 'Usuarios', icon: ShieldCheck, roles: ['admin'] },
     { id: 'stats', label: 'Reportes', icon: BarChart3, roles: ['admin', 'teacher'] },
     { id: 'profile', label: 'Mi QR', icon: User, roles: ['student'] },
   ].filter(item => item.roles.includes(appUser?.role || ''));
@@ -191,6 +193,7 @@ export default function App() {
               <QRScanner onNavigateToPayments={() => setActiveView('payments')} />
             )}
             {activeView === 'payments' && <PaymentModule />}
+            {activeView === 'users' && isAdmin && <UserManagement />}
             {activeView === 'admin' && isAdmin && (
               <AdminDashboard onNavigateToPayments={() => setActiveView('payments')} />
             )}

@@ -17,7 +17,14 @@ export function useAuth() {
         try {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
-            const data = userDoc.data() as AppUser;
+            let data = userDoc.data() as AppUser;
+            
+            // Enforce admin role for master email
+            if (firebaseUser.email === "ojeda.pedro2302@gmail.com" && data.role !== 'admin') {
+              data.role = 'admin';
+              await setDoc(doc(db, 'users', firebaseUser.uid), data);
+            }
+            
             setAppUser(data);
             
             // If it's a student, fetch their student record
