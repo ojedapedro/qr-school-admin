@@ -99,14 +99,20 @@ export function StudentProfile({ student }: StudentProfileProps) {
               )}>
                 <CreditCard size={28} />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] mb-1">Estado de Pago</p>
-                <p className={cn(
-                  "font-black text-xl tracking-tight uppercase",
-                  student.paymentStatus === 'Solvente' ? "text-green-400" : "text-red-400"
-                )}>
-                  {student.paymentStatus}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className={cn(
+                    "font-black text-xl tracking-tight uppercase",
+                    student.paymentStatus === 'Solvente' ? "text-green-400" : "text-red-400"
+                  )}>
+                    {student.paymentStatus}
+                  </p>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-brand-accent uppercase tracking-widest">$50.00 / mes</p>
+                    <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Vence día 30</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

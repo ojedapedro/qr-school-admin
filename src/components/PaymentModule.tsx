@@ -25,12 +25,15 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { syncAllStudentsPaymentStatus } from '../lib/paymentUtils';
 
 export function PaymentModule() {
   const { user } = useAuth();
@@ -39,8 +42,9 @@ export function PaymentModule() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<(Student & { docId: string }) | null>(null);
-  const [paymentData, setPaymentData] = useState({ amount: 0, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
+  const [paymentData, setPaymentData] = useState({ amount: 50, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     // Fetch students
@@ -85,9 +89,31 @@ export function PaymentModule() {
       });
 
       setSelectedStudent(null);
-      setPaymentData({ amount: 0, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
+      setPaymentData({ amount: 50, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'payments');
+    }
+  };
+
+  const handleSyncStatus = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncAllStudentsPaymentStatus();
+      if (result.success) {
+        if (result.moraStudents && result.moraStudents.length > 0) {
+          const studentList = result.moraStudents.join(', ');
+          alert(`Sincronización completada. Los siguientes alumnos están en mora por no pagar el mes anterior: ${studentList}`);
+        } else {
+          alert('Sincronización de solvencia completada correctamente. Todos los alumnos están al día con el mes anterior.');
+        }
+      } else {
+        alert('Error al sincronizar solvencia.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error al sincronizar solvencia.');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -102,6 +128,34 @@ export function PaymentModule() {
         <div className="space-y-1">
           <h2 className="text-3xl font-black tracking-tight">Registro de Pagos</h2>
           <p className="text-brand-text-muted">Gestiona la solvencia económica de los alumnos</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="bg-brand-accent/10 border border-brand-accent/20 px-6 py-3 rounded-2xl flex items-center gap-3">
+            <div className="p-2 bg-brand-accent/20 rounded-lg text-brand-accent">
+              <DollarSign size={20} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-text-muted">Cuota Mensual</p>
+              <p className="text-xl font-black text-brand-accent">$50.00</p>
+            </div>
+          </div>
+          <div className="bg-orange-500/10 border border-orange-500/20 px-6 py-3 rounded-2xl flex items-center gap-3">
+            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-400">
+              <Calendar size={20} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-text-muted">Vencimiento</p>
+              <p className="text-xl font-black text-orange-400">Día 30</p>
+            </div>
+          </div>
+          <button
+            onClick={handleSyncStatus}
+            disabled={isSyncing}
+            className="flex items-center gap-2 bg-white/5 border border-white/10 text-white px-6 py-3 rounded-2xl hover:bg-white/10 transition-all active:scale-95 font-bold shadow-lg disabled:opacity-50"
+          >
+            <RefreshCw size={20} className={cn(isSyncing && "animate-spin")} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar Mora'}
+          </button>
         </div>
       </div>
 
