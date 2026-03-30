@@ -28,6 +28,10 @@ async function testConnection() {
     const testDoc = await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('Firestore connection test successful');
   } catch (error: any) {
+    if(error.message?.toLowerCase().includes('permission') || error.code === 'permission-denied') {
+      console.log('Firestore connection test: Server responded (Permissions denied, but connected)');
+      return;
+    }
     console.error("Firestore connection test failed:", error.message);
     if(error.message.includes('the client is offline')) {
       console.error("CRITICAL: The client is offline. This usually means the Project ID, API Key, or Database ID is incorrect in firebase-applet-config.json.");

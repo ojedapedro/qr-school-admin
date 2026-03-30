@@ -122,5 +122,10 @@ service cloud.firestore {
       allow update: if isAdmin() && isValidPayment(request.resource.data);
       allow delete: if isAdmin();
     }
+
+    // Rule for connection testing
+    match /test/connection {
+      allow read: if true;
+    }
   }
 }

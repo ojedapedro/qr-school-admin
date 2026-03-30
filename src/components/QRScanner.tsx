@@ -12,14 +12,60 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
   const [isScanning, setIsScanning] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
+  // Audio and Haptic feedback helper
+  const playFeedback = (type: 'success' | 'error') => {
+    try {
+      // Vibration (Haptic feedback)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(type === 'success' ? 100 : [100, 50, 100]);
+      }
+
+      // Audio using Web Audio API (No external files needed)
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      if (type === 'success') {
+        // High-pitched "ding"
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+        oscillator.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1); // E6
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+      } else {
+        // Low-pitched "buzz"
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // A3
+        oscillator.frequency.linearRampToValueAtTime(110, audioCtx.currentTime + 0.2); // A2
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+      }
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {
+      console.warn('Feedback audio/vibration not supported or blocked:', e);
+    }
+  };
+
   useEffect(() => {
     if (isScanning && !scannerRef.current) {
+      // Optimized for mobile: use a dynamic qrbox and higher fps
       scannerRef.current = new Html5QrcodeScanner(
         "reader",
         { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+          fps: 15, 
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            const qrboxSize = Math.floor(minEdge * 0.7);
+            return { width: qrboxSize, height: qrboxSize };
+          },
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true,
         },
         /* verbose= */ false
       );
@@ -56,6 +102,7 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
       }
 
       if (querySnapshot.empty) {
+        playFeedback('error');
         setScanResult({ success: false, message: "Alumno no encontrado en la base de datos." });
         return;
       }
@@ -64,6 +111,7 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
 
       // 2. Check payment status
       if (studentData.paymentStatus === 'Mora') {
+        playFeedback('error');
         setScanResult({ 
           success: false, 
           message: "ACCESO DENEGADO: Pendiente por Pago", 
@@ -90,6 +138,7 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
         message: "Asistencia Registrada Correctamente", 
         student: studentData 
       });
+      playFeedback('success');
 
     } catch (error) {
       console.error("Scan error:", error);
@@ -110,10 +159,18 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
     <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
       <div className="text-center space-y-3">
         <h2 className="text-3xl font-black tracking-tight">Escáner de Asistencia</h2>
-        <p className="text-brand-text-muted">Escanea el código QR del alumno para validar su entrada</p>
+        <p className="text-brand-text-muted px-4">Escanea el carnet del alumno para validar su entrada a la institución</p>
       </div>
 
-      <div className="w-full max-w-md glass-card overflow-hidden border-white/5">
+      <div className="w-full max-w-md glass-card overflow-hidden border-white/5 relative">
+        {/* Mobile Instructions Overlay */}
+        {isScanning && (
+          <div className="absolute top-4 left-0 right-0 z-10 flex justify-center pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/80">
+              Apunta al código QR del carnet
+            </div>
+          </div>
+        )}
         {!isScanning && !scanResult && (
           <div className="p-16 flex flex-col items-center space-y-6">
             <div className="w-24 h-24 bg-brand-accent/20 rounded-3xl flex items-center justify-center text-brand-accent shadow-xl shadow-brand-accent/10">

@@ -57,6 +57,7 @@ export function useAuth() {
             setAppUser(newAppUser);
           }
         } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
           console.error("Error fetching user data:", error);
         }
       } else {
