@@ -4,7 +4,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'fire
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Student, AttendanceRecord } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, XCircle, Camera, ShieldAlert, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Camera, ShieldAlert, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () => void }) {
@@ -13,6 +13,8 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualId, setManualId] = useState('');
   const [isManualMode, setIsManualMode] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<any[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   // Audio and Haptic feedback helper
@@ -72,16 +74,42 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
             aspectRatio: 1.0,
           };
 
-          // Try to use back camera by default
-          await html5QrCode.start(
-            { facingMode: "environment" }, 
-            config, 
-            onScanSuccess, 
-            onScanFailure
-          );
+          // Get available cameras first
+          const cameras = await Html5Qrcode.getCameras();
+          setAvailableCameras(cameras);
+
+          if (cameras && cameras.length > 0) {
+            // Try to use the last camera (usually the main back camera on mobile)
+            const lastCamera = cameras[cameras.length - 1];
+            setCurrentCameraIndex(cameras.length - 1);
+            await html5QrCode.start(
+              lastCamera.id, 
+              config, 
+              onScanSuccess, 
+              onScanFailure
+            );
+          } else {
+            // Fallback to facingMode if no cameras listed
+            await html5QrCode.start(
+              { facingMode: "environment" }, 
+              config, 
+              onScanSuccess, 
+              onScanFailure
+            );
+          }
         } catch (err: any) {
           console.error("Error starting scanner:", err);
-          setCameraError("No se pudo acceder a la cámara. Asegúrate de dar permisos y cerrar otras aplicaciones que puedan estar usándola.");
+          let errorMessage = "No se pudo acceder a la cámara.";
+          
+          if (err?.toString().includes("NotAllowedError") || err?.toString().includes("Permission denied")) {
+            errorMessage = "Permiso de cámara denegado. Por favor, habilita el acceso en la configuración de tu navegador.";
+          } else if (err?.toString().includes("NotFoundError")) {
+            errorMessage = "No se encontró ninguna cámara en este dispositivo.";
+          } else if (err?.toString().includes("NotReadableError") || err?.toString().includes("Could not start video source")) {
+            errorMessage = "La cámara está siendo usada por otra aplicación o no se pudo iniciar.";
+          }
+          
+          setCameraError(errorMessage);
           setIsScanning(false);
         }
       };
@@ -202,6 +230,40 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
     }
   };
 
+  const switchCamera = async () => {
+    if (availableCameras.length < 2 || !scannerRef.current) return;
+    
+    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
+    setCurrentCameraIndex(nextIndex);
+    
+    try {
+      await scannerRef.current.stop();
+      
+      const config = { 
+        fps: 15, 
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.7);
+          return { width: qrboxSize, height: qrboxSize };
+        },
+        aspectRatio: 1.0,
+      };
+      
+      await scannerRef.current.start(
+        availableCameras[nextIndex].id,
+        config,
+        onScanSuccess,
+        onScanFailure
+      );
+    } catch (err) {
+      console.error("Error switching camera:", err);
+    }
+  };
+
+  const openInNewTab = () => {
+    window.open(window.location.href, '_blank');
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
       <div className="text-center space-y-3">
@@ -224,13 +286,26 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
             <div className="bg-red-500/20 p-4 rounded-full text-red-500 inline-flex">
               <ShieldAlert size={32} />
             </div>
-            <p className="text-red-400 font-bold text-sm">{cameraError}</p>
-            <button 
-              onClick={() => setIsScanning(true)}
-              className="brand-button text-xs py-2 px-4"
-            >
-              Reintentar Cámara
-            </button>
+            <div className="space-y-2">
+              <p className="text-red-400 font-bold text-sm leading-relaxed">{cameraError}</p>
+              <p className="text-brand-text-muted text-[10px] uppercase tracking-widest font-black">
+                Tip: Si estás en móvil, intenta abrir la app en una pestaña nueva
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <button 
+                onClick={() => setIsScanning(true)}
+                className="brand-button text-xs py-3 w-full"
+              >
+                Reintentar Cámara
+              </button>
+              <button 
+                onClick={openInNewTab}
+                className="w-full py-3 bg-white/5 text-brand-text-muted rounded-2xl font-black hover:bg-white/10 transition-all text-[10px] uppercase tracking-widest border border-white/10"
+              >
+                Abrir en pestaña nueva
+              </button>
+            </div>
           </div>
         )}
 
@@ -359,12 +434,23 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
       </div>
 
       {isScanning && (
-        <button
-          onClick={stopScanner}
-          className="text-brand-text-muted hover:text-white font-bold transition-colors"
-        >
-          Cancelar Escaneo
-        </button>
+        <div className="flex flex-col items-center gap-4">
+          {availableCameras.length > 1 && (
+            <button
+              onClick={switchCamera}
+              className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-bold hover:bg-white/10 transition-all active:scale-95 text-xs uppercase tracking-widest"
+            >
+              <RefreshCw size={16} />
+              Cambiar Cámara
+            </button>
+          )}
+          <button
+            onClick={stopScanner}
+            className="text-brand-text-muted hover:text-white font-bold transition-colors text-sm"
+          >
+            Cancelar Escaneo
+          </button>
+        </div>
       )}
     </div>
   );

@@ -2,16 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, orderBy, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { AttendanceRecord, Student } from '../types';
-import { format, isToday, startOfDay, endOfDay } from 'date-fns';
+import { format, isToday, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Users, UserCheck, UserX, BarChart3, Download, Calendar as CalendarIcon } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Users, UserCheck, UserX, BarChart3, Download, Calendar as CalendarIcon, Filter, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export function AttendanceStats() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
     // Get all students to calculate percentages
@@ -21,9 +23,11 @@ export function AttendanceStats() {
       handleFirestoreError(error, OperationType.LIST, 'students');
     });
 
-    // Get today's attendance
+    // Get attendance within range
     const q = query(
       collection(db, 'attendance'),
+      where('timestamp', '>=', startOfDay(new Date(startDate + 'T00:00:00')).toISOString()),
+      where('timestamp', '<=', endOfDay(new Date(endDate + 'T23:59:59')).toISOString()),
       orderBy('timestamp', 'desc')
     );
 
@@ -36,16 +40,16 @@ export function AttendanceStats() {
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'attendance');
+      setLoading(false);
     });
 
     return () => {
       unsubStudents();
       unsubAttendance();
     };
-  }, []);
+  }, [startDate, endDate]);
 
-  const todayAttendance = attendance.filter(a => isToday(new Date(a.timestamp)));
-  const presentCount = new Set(todayAttendance.map(a => a.studentId)).size;
+  const presentCount = new Set(attendance.map(a => a.studentId)).size;
   const totalStudents = students.length;
   const absentCount = totalStudents - presentCount;
   const attendanceRate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
@@ -53,7 +57,7 @@ export function AttendanceStats() {
   const exportAttendance = () => {
     const csvRows = [
       ['Nombre', 'ID', 'Grado', 'Fecha/Hora'],
-      ...todayAttendance.map(a => [
+      ...attendance.map(a => [
         a.studentName,
         a.studentId,
         a.grade,
@@ -65,9 +69,15 @@ export function AttendanceStats() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `asistencia_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `asistencia_${startDate}_a_${endDate}.csv`);
     document.body.appendChild(link);
     link.click();
+  };
+
+  const resetDates = () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    setStartDate(today);
+    setEndDate(today);
   };
 
   return (
@@ -75,15 +85,54 @@ export function AttendanceStats() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-3xl font-black tracking-tight">Dashboard de Asistencia</h2>
-          <p className="text-brand-text-muted">Resumen de actividad y registros del día</p>
+          <p className="text-brand-text-muted">Resumen de actividad y registros del periodo</p>
         </div>
-        <button
-          onClick={exportAttendance}
-          className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white px-6 py-3 rounded-2xl hover:bg-white/10 transition-all active:scale-95 font-bold shadow-lg"
-        >
-          <Download size={20} />
-          Exportar Hoy
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={resetDates}
+            className="p-3 bg-white/5 border border-white/10 text-brand-text-muted rounded-2xl hover:bg-white/10 transition-all active:scale-95 shadow-lg"
+            title="Hoy"
+          >
+            <RefreshCw size={20} />
+          </button>
+          <button
+            onClick={exportAttendance}
+            className="flex items-center justify-center gap-2 bg-brand-accent/10 border border-brand-accent/20 text-brand-accent px-6 py-3 rounded-2xl hover:bg-brand-accent/20 transition-all active:scale-95 font-bold shadow-lg"
+          >
+            <Download size={20} />
+            Exportar Rango
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-card p-6 border-white/5">
+        <div className="flex flex-col sm:flex-row items-end gap-6">
+          <div className="flex-1 space-y-2 w-full">
+            <label className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
+              <CalendarIcon size={12} /> Fecha Inicio
+            </label>
+            <input 
+              type="date" 
+              className="brand-input w-full"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 space-y-2 w-full">
+            <label className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
+              <CalendarIcon size={12} /> Fecha Fin
+            </label>
+            <input 
+              type="date" 
+              className="brand-input w-full"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center justify-center p-4 bg-brand-accent/20 rounded-2xl text-brand-accent shrink-0 hidden sm:flex">
+            <Filter size={24} />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -95,13 +144,13 @@ export function AttendanceStats() {
         />
         <StatCard 
           icon={<UserCheck size={24} />}
-          label="Presentes Hoy"
+          label="Presentes"
           value={presentCount}
           color="green-500"
         />
         <StatCard 
           icon={<UserX size={24} />}
-          label="Ausentes Hoy"
+          label="Ausentes"
           value={absentCount}
           color="red-500"
         />
@@ -119,8 +168,9 @@ export function AttendanceStats() {
             <div className="p-2 bg-brand-accent/20 rounded-lg text-brand-accent">
               <CalendarIcon size={20} />
             </div>
-            Registros Recientes
+            Registros del Periodo
           </h3>
+          {loading && <RefreshCw size={16} className="animate-spin text-brand-accent" />}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -132,7 +182,7 @@ export function AttendanceStats() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {attendance.slice(0, 20).map((record) => (
+              {attendance.map((record) => (
                 <tr key={record.id} className="hover:bg-white/5 transition-colors group">
                   <td className="px-6 py-5">
                     <div className="font-bold text-white group-hover:text-brand-accent transition-colors">{record.studentName}</div>
