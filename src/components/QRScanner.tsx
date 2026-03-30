@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Student, AttendanceRecord } from '../types';
@@ -10,7 +10,10 @@ import { cn } from '../lib/utils';
 export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () => void }) {
   const [scanResult, setScanResult] = useState<{ success: boolean; message: string; student?: Student } | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [manualId, setManualId] = useState('');
+  const [isManualMode, setIsManualMode] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   // Audio and Haptic feedback helper
   const playFeedback = (type: 'success' | 'error') => {
@@ -53,46 +56,82 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
 
   useEffect(() => {
     if (isScanning && !scannerRef.current) {
-      // Optimized for mobile: use a dynamic qrbox and higher fps
-      scannerRef.current = new Html5QrcodeScanner(
-        "reader",
-        { 
-          fps: 15, 
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const qrboxSize = Math.floor(minEdge * 0.7);
-            return { width: qrboxSize, height: qrboxSize };
-          },
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true,
-        },
-        /* verbose= */ false
-      );
+      const startScanner = async () => {
+        try {
+          setCameraError(null);
+          const html5QrCode = new Html5Qrcode("reader");
+          scannerRef.current = html5QrCode;
 
-      scannerRef.current.render(onScanSuccess, onScanFailure);
+          const config = { 
+            fps: 15, 
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+              const qrboxSize = Math.floor(minEdge * 0.7);
+              return { width: qrboxSize, height: qrboxSize };
+            },
+            aspectRatio: 1.0,
+          };
+
+          // Try to use back camera by default
+          await html5QrCode.start(
+            { facingMode: "environment" }, 
+            config, 
+            onScanSuccess, 
+            onScanFailure
+          );
+        } catch (err: any) {
+          console.error("Error starting scanner:", err);
+          setCameraError("No se pudo acceder a la cámara. Asegúrate de dar permisos y cerrar otras aplicaciones que puedan estar usándola.");
+          setIsScanning(false);
+        }
+      };
+
+      startScanner();
     }
 
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.clear().catch(err => console.error("Failed to clear scanner", err));
-        scannerRef.current = null;
+        if (scannerRef.current.isScanning) {
+          scannerRef.current.stop().then(() => {
+            scannerRef.current = null;
+          }).catch(err => console.error("Failed to stop scanner", err));
+        } else {
+          scannerRef.current = null;
+        }
       }
     };
   }, [isScanning]);
 
+  const stopScanner = async () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current = null;
+      } catch (err) {
+        console.error("Error stopping scanner:", err);
+      }
+    }
+    setIsScanning(false);
+  };
+
   async function onScanSuccess(decodedText: string) {
-    if (scanResult) return; // Prevent multiple scans at once
+    if (scanResult) return;
 
     try {
-      setIsScanning(false);
-      if (scannerRef.current) {
-        await scannerRef.current.clear();
-        scannerRef.current = null;
-      }
+      await stopScanner();
+      
+      // Process scan...
+      await processStudentId(decodedText);
+    } catch (error) {
+      console.error("Scan error:", error);
+      setScanResult({ success: false, message: "Error al procesar el escaneo." });
+    }
+  }
 
+  const processStudentId = async (studentId: string) => {
+    try {
       // 1. Check if student exists
-      const q = query(collection(db, 'students'), where('id', '==', decodedText));
+      const q = query(collection(db, 'students'), where('id', '==', studentId));
       let querySnapshot;
       try {
         querySnapshot = await getDocs(q);
@@ -139,20 +178,28 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
         student: studentData 
       });
       playFeedback('success');
-
     } catch (error) {
-      console.error("Scan error:", error);
-      setScanResult({ success: false, message: "Error al procesar el escaneo." });
+      console.error("Process error:", error);
+      setScanResult({ success: false, message: "Error al procesar los datos." });
     }
-  }
+  };
 
   function onScanFailure(error: any) {
-    // Silently handle scan failures (usually just "no QR found in frame")
+    // Silently handle scan failures
   }
 
   const resetScanner = () => {
     setScanResult(null);
     setIsScanning(true);
+    setManualId('');
+    setIsManualMode(false);
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualId.trim()) {
+      processStudentId(manualId.trim());
+    }
   };
 
   return (
@@ -171,17 +218,76 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
             </div>
           </div>
         )}
-        {!isScanning && !scanResult && (
+        
+        {cameraError && !scanResult && (
+          <div className="p-8 text-center space-y-4">
+            <div className="bg-red-500/20 p-4 rounded-full text-red-500 inline-flex">
+              <ShieldAlert size={32} />
+            </div>
+            <p className="text-red-400 font-bold text-sm">{cameraError}</p>
+            <button 
+              onClick={() => setIsScanning(true)}
+              className="brand-button text-xs py-2 px-4"
+            >
+              Reintentar Cámara
+            </button>
+          </div>
+        )}
+
+        {!isScanning && !scanResult && !isManualMode && (
           <div className="p-16 flex flex-col items-center space-y-6">
             <div className="w-24 h-24 bg-brand-accent/20 rounded-3xl flex items-center justify-center text-brand-accent shadow-xl shadow-brand-accent/10">
               <Camera size={48} />
             </div>
-            <button
-              onClick={() => setIsScanning(true)}
-              className="brand-button w-full"
-            >
-              Iniciar Cámara
-            </button>
+            <div className="space-y-3 w-full">
+              <button
+                onClick={() => setIsScanning(true)}
+                className="brand-button w-full"
+              >
+                Iniciar Cámara
+              </button>
+              <button
+                onClick={() => setIsManualMode(true)}
+                className="w-full py-4 bg-white/5 text-brand-text-muted rounded-2xl font-black hover:bg-white/10 transition-all text-xs uppercase tracking-widest"
+              >
+                Ingreso Manual (ID)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isManualMode && !scanResult && (
+          <div className="p-10 space-y-6">
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black">Ingreso Manual</h3>
+              <p className="text-xs text-brand-text-muted">Ingresa el ID del alumno que aparece en su carnet</p>
+            </div>
+            <form onSubmit={handleManualSubmit} className="space-y-4">
+              <input 
+                type="text" 
+                placeholder="Ej: ALUM-001"
+                className="brand-input w-full text-center text-xl font-mono"
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsManualMode(false)}
+                  className="flex-1 py-4 bg-white/5 text-brand-text-muted rounded-2xl font-black hover:bg-white/10 transition-all text-xs"
+                >
+                  Volver
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] brand-button"
+                  disabled={!manualId.trim()}
+                >
+                  Validar ID
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -254,7 +360,7 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
 
       {isScanning && (
         <button
-          onClick={() => setIsScanning(false)}
+          onClick={stopScanner}
           className="text-brand-text-muted hover:text-white font-bold transition-colors"
         >
           Cancelar Escaneo

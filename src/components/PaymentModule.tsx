@@ -21,7 +21,11 @@ import {
   Calendar, 
   DollarSign,
   User,
-  ArrowRight
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -36,6 +40,7 @@ export function PaymentModule() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<(Student & { docId: string }) | null>(null);
   const [paymentData, setPaymentData] = useState({ amount: 0, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
+  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch students
@@ -176,23 +181,76 @@ export function PaymentModule() {
                 <p className="text-brand-text-muted font-bold">No hay registros recientes.</p>
               </div>
             ) : (
-              payments.map((payment) => (
-                <div key={payment.id} className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 hover:border-brand-accent/30 group">
-                  <div className="bg-green-500/20 p-3 rounded-xl text-green-400 shadow-inner">
-                    <DollarSign size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white truncate group-hover:text-brand-accent transition-colors">{payment.studentName}</p>
-                    <div className="flex items-center justify-between text-xs text-brand-text-muted mt-2 font-bold uppercase tracking-widest">
-                      <span>{payment.month}</span>
-                      <span className="text-green-400 text-sm font-black">${payment.amount}</span>
+              <div className="space-y-3">
+                {payments.map((payment) => {
+                  const isExpanded = expandedPaymentId === payment.id;
+                  return (
+                    <div 
+                      key={payment.id} 
+                      className={cn(
+                        "flex flex-col rounded-2xl bg-white/5 transition-all border border-white/5 hover:border-brand-accent/30 overflow-hidden cursor-pointer",
+                        isExpanded ? "bg-white/10 border-brand-accent/30 shadow-lg shadow-brand-accent/5" : "hover:bg-white/8"
+                      )}
+                      onClick={() => setExpandedPaymentId(isExpanded ? null : (payment.id || null))}
+                    >
+                      <div className="flex items-start gap-4 p-4">
+                        <div className="bg-green-500/20 p-3 rounded-xl text-green-400 shadow-inner shrink-0">
+                          <DollarSign size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-bold text-white truncate group-hover:text-brand-accent transition-colors">{payment.studentName}</p>
+                            {isExpanded ? <ChevronUp size={16} className="text-brand-text-muted" /> : <ChevronDown size={16} className="text-brand-text-muted" />}
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-brand-text-muted mt-1 font-bold uppercase tracking-widest">
+                            <span>{payment.month}</span>
+                            <span className="text-green-400 text-sm font-black">${payment.amount}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                          >
+                            <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5 bg-black/20">
+                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                  <Clock size={12} />
+                                </div>
+                                <span className="text-brand-text-muted">Fecha y Hora:</span>
+                                <span className="text-white ml-auto">
+                                  {format(new Date(payment.date), "d 'de' MMMM, yyyy HH:mm", { locale: es })}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                  <ShieldCheck size={12} />
+                                </div>
+                                <span className="text-brand-text-muted">Registrado por:</span>
+                                <span className="text-white ml-auto">{payment.recordedBy}</span>
+                              </div>
+
+                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                  <User size={12} />
+                                </div>
+                                <span className="text-brand-text-muted">ID Alumno:</span>
+                                <span className="text-white ml-auto font-mono">{payment.studentId}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <p className="text-[10px] text-brand-text-muted mt-2 font-mono opacity-60">
-                      {format(new Date(payment.date), "d 'de' MMMM, HH:mm", { locale: es })}
-                    </p>
-                  </div>
-                </div>
-              ))
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
