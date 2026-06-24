@@ -10,7 +10,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Student, PaymentRecord } from '../types';
+import { Student, PaymentRecord, MoraSyncHistory } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { 
   CreditCard, 
@@ -39,11 +39,13 @@ export function PaymentModule() {
   const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [syncHistory, setSyncHistory] = useState<MoraSyncHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<(Student & { docId: string }) | null>(null);
   const [paymentData, setPaymentData] = useState({ amount: 50, month: format(new Date(), 'MMMM yyyy', { locale: es }) });
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
+  const [expandedSyncId, setExpandedSyncId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
@@ -59,12 +61,20 @@ export function PaymentModule() {
     const unsubPayments = onSnapshot(qPayments, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as PaymentRecord[];
       setPayments(data);
-      setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'payments'));
+
+    // Fetch sync history
+    const qSync = query(collection(db, 'mora_sync_history'), orderBy('timestamp', 'desc'), limit(10));
+    const unsubSync = onSnapshot(qSync, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as MoraSyncHistory[];
+      setSyncHistory(data);
+      setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'mora_sync_history'));
 
     return () => {
       unsubStudents();
       unsubPayments();
+      unsubSync();
     };
   }, []);
 
@@ -98,11 +108,12 @@ export function PaymentModule() {
   const handleSyncStatus = async () => {
     setIsSyncing(true);
     try {
-      const result = await syncAllStudentsPaymentStatus();
+      const adminName = user?.displayName || user?.email || 'Admin';
+      const result = await syncAllStudentsPaymentStatus(adminName);
       if (result.success) {
         if (result.moraStudents && result.moraStudents.length > 0) {
           const studentList = result.moraStudents.join(', ');
-          alert(`Sincronización completada. Los siguientes alumnos están en mora por no pagar el mes anterior: ${studentList}`);
+          alert(`Sincronización completada. Se ha registrado en el historial. Los siguientes alumnos están en mora por no pagar el mes anterior: ${studentList}`);
         } else {
           alert('Sincronización de solvencia completada correctamente. Todos los alumnos están al día con el mes anterior.');
         }
@@ -218,94 +229,184 @@ export function PaymentModule() {
           </div>
         </div>
 
-        {/* Recent Payments History */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-3 text-white font-black tracking-tight uppercase text-sm">
-            <div className="p-2 bg-brand-accent/20 rounded-lg text-brand-accent">
-              <History size={20} />
+        {/* Recent Payments History & Sync History */}
+        <div className="space-y-10">
+          {/* Recent Payments */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 text-white font-black tracking-tight uppercase text-sm">
+              <div className="p-2 bg-brand-accent/20 rounded-lg text-brand-accent">
+                <History size={20} />
+              </div>
+              <h3>Últimos Pagos</h3>
             </div>
-            <h3>Últimos Pagos</h3>
-          </div>
-          <div className="glass-card p-5 space-y-4 border-white/5">
-            {payments.length === 0 ? (
-              <div className="text-center py-12 space-y-3">
-                <div className="inline-flex p-4 bg-white/5 rounded-full text-brand-text-muted">
-                  <DollarSign size={32} />
+            <div className="glass-card p-5 space-y-4 border-white/5">
+              {payments.length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <div className="inline-flex p-4 bg-white/5 rounded-full text-brand-text-muted">
+                    <DollarSign size={32} />
+                  </div>
+                  <p className="text-brand-text-muted font-bold">No hay registros recientes.</p>
                 </div>
-                <p className="text-brand-text-muted font-bold">No hay registros recientes.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {payments.map((payment) => {
-                  const isExpanded = expandedPaymentId === payment.id;
-                  return (
-                    <div 
-                      key={payment.id} 
-                      className={cn(
-                        "flex flex-col rounded-2xl bg-white/5 transition-all border border-white/5 hover:border-brand-accent/30 overflow-hidden cursor-pointer",
-                        isExpanded ? "bg-white/10 border-brand-accent/30 shadow-lg shadow-brand-accent/5" : "hover:bg-white/8"
-                      )}
-                      onClick={() => setExpandedPaymentId(isExpanded ? null : (payment.id || null))}
-                    >
-                      <div className="flex items-start gap-4 p-4">
-                        <div className="bg-green-500/20 p-3 rounded-xl text-green-400 shadow-inner shrink-0">
-                          <DollarSign size={18} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-bold text-white truncate group-hover:text-brand-accent transition-colors">{payment.studentName}</p>
-                            {isExpanded ? <ChevronUp size={16} className="text-brand-text-muted" /> : <ChevronDown size={16} className="text-brand-text-muted" />}
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-brand-text-muted mt-1 font-bold uppercase tracking-widest">
-                            <span>{payment.month}</span>
-                            <span className="text-green-400 text-sm font-black">${payment.amount}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                          >
-                            <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5 bg-black/20">
-                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
-                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
-                                  <Clock size={12} />
-                                </div>
-                                <span className="text-brand-text-muted">Fecha y Hora:</span>
-                                <span className="text-white ml-auto">
-                                  {format(new Date(payment.date), "d 'de' MMMM, yyyy HH:mm", { locale: es })}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
-                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
-                                  <ShieldCheck size={12} />
-                                </div>
-                                <span className="text-brand-text-muted">Registrado por:</span>
-                                <span className="text-white ml-auto">{payment.recordedBy}</span>
-                              </div>
-
-                              <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
-                                <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
-                                  <User size={12} />
-                                </div>
-                                <span className="text-brand-text-muted">ID Alumno:</span>
-                                <span className="text-white ml-auto font-mono">{payment.studentId}</span>
-                              </div>
-                            </div>
-                          </motion.div>
+              ) : (
+                <div className="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-1">
+                  {payments.map((payment) => {
+                    const isExpanded = expandedPaymentId === payment.id;
+                    return (
+                      <div 
+                        key={payment.id} 
+                        className={cn(
+                          "flex flex-col rounded-2xl bg-white/5 transition-all border border-white/5 hover:border-brand-accent/30 overflow-hidden cursor-pointer",
+                          isExpanded ? "bg-white/10 border-brand-accent/30 shadow-lg shadow-brand-accent/5" : "hover:bg-white/8"
                         )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
+                        onClick={() => setExpandedPaymentId(isExpanded ? null : (payment.id || null))}
+                      >
+                        <div className="flex items-start gap-4 p-4">
+                          <div className="bg-green-500/20 p-3 rounded-xl text-green-400 shadow-inner shrink-0">
+                            <DollarSign size={18} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-bold text-white truncate">{payment.studentName}</p>
+                              {isExpanded ? <ChevronUp size={16} className="text-brand-text-muted" /> : <ChevronDown size={16} className="text-brand-text-muted" />}
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-brand-text-muted mt-1 font-bold uppercase tracking-widest">
+                              <span>{payment.month}</span>
+                              <span className="text-green-400 text-sm font-black">${payment.amount}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                            >
+                              <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5 bg-black/20">
+                                <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                  <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                    <Clock size={12} />
+                                  </div>
+                                  <span className="text-brand-text-muted">Fecha y Hora:</span>
+                                  <span className="text-white ml-auto">
+                                    {format(new Date(payment.date), "d 'de' MMMM, yyyy HH:mm", { locale: es })}
+                                  </span>
+                                </div>
+                                
+                                <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                  <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                    <ShieldCheck size={12} />
+                                  </div>
+                                  <span className="text-brand-text-muted">Registrado por:</span>
+                                  <span className="text-white ml-auto">{payment.recordedBy}</span>
+                                </div>
+
+                                <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.15em] font-black">
+                                  <div className="p-1.5 bg-brand-accent/10 rounded-md text-brand-accent">
+                                    <User size={12} />
+                                  </div>
+                                  <span className="text-brand-text-muted">ID Alumno:</span>
+                                  <span className="text-white ml-auto font-mono">{payment.studentId}</span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sync History */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 text-white font-black tracking-tight uppercase text-sm">
+              <div className="p-2 bg-orange-500/20 rounded-lg text-orange-400">
+                <AlertTriangle size={20} />
               </div>
-            )}
+              <h3>Historial de Sincronización</h3>
+            </div>
+            <div className="glass-card p-5 space-y-4 border-white/5">
+              {syncHistory.length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <div className="inline-flex p-4 bg-white/5 rounded-full text-brand-text-muted">
+                    <RefreshCw size={32} />
+                  </div>
+                  <p className="text-brand-text-muted font-bold">No hay registros de sincronización.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-1">
+                  {syncHistory.map((sync) => {
+                    const isExpanded = expandedSyncId === sync.id;
+                    return (
+                      <div 
+                        key={sync.id} 
+                        className={cn(
+                          "flex flex-col rounded-2xl bg-white/5 transition-all border border-white/5 hover:border-orange-500/30 overflow-hidden cursor-pointer",
+                          isExpanded ? "bg-white/10 border-orange-500/30 shadow-lg shadow-orange-500/5" : "hover:bg-white/8"
+                        )}
+                        onClick={() => setExpandedSyncId(isExpanded ? null : (sync.id || null))}
+                      >
+                        <div className="flex items-start gap-4 p-4">
+                          <div className={cn(
+                            "p-3 rounded-xl shadow-inner shrink-0",
+                            sync.moraStudentsCount > 0 ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+                          )}>
+                            <AlertTriangle size={18} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-bold text-white truncate text-sm">Sincronizado por {sync.syncedBy}</p>
+                              {isExpanded ? <ChevronUp size={16} className="text-brand-text-muted" /> : <ChevronDown size={16} className="text-brand-text-muted" />}
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-brand-text-muted mt-1 font-bold uppercase tracking-widest">
+                              <span>{format(new Date(sync.timestamp), "d 'de' MMMM, yyyy HH:mm", { locale: es })}</span>
+                              <span className={cn("text-xs font-black", sync.moraStudentsCount > 0 ? "text-red-400" : "text-green-400")}>
+                                {sync.moraStudentsCount} Alumnos en Mora
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                            >
+                              <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5 bg-black/20">
+                                {sync.moraStudents && sync.moraStudents.length > 0 ? (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] uppercase tracking-[0.15em] font-black text-brand-text-muted mb-2">Estudiantes con Mora el mes anterior:</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {sync.moraStudents.map((stName, idx) => (
+                                        <span key={idx} className="bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+                                          {stName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] uppercase tracking-[0.15em] font-black text-green-400">
+                                    Ningún estudiante se encontraba en mora con el mes anterior.
+                                  </p>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -33,3 +33,11 @@ export interface PaymentRecord {
   date: string;
   recordedBy: string;
 }
+
+export interface MoraSyncHistory {
+  id?: string;
+  timestamp: string;
+  syncedBy: string;
+  moraStudentsCount: number;
+  moraStudents: string[];
+}

@@ -50,6 +50,18 @@
         "recordedBy": { "type": "string", "description": "Name or email of the admin who recorded it." }
       },
       "required": ["studentId", "studentName", "amount", "month", "date", "recordedBy"]
+    },
+    "MoraSyncHistory": {
+      "title": "MoraSyncHistory",
+      "description": "Represents a historical record of a mora status sync.",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the sync occurred." },
+        "syncedBy": { "type": "string", "description": "Name or email of the admin who triggered the sync." },
+        "moraStudentsCount": { "type": "number", "description": "Total number of students in mora." },
+        "moraStudents": { "type": "array", "description": "List of names of students in mora for the previous month." }
+      },
+      "required": ["timestamp", "syncedBy", "moraStudentsCount", "moraStudents"]
     }
   },
   "firestore": {
@@ -68,6 +80,13 @@
     "/payments/{paymentId}": {
       "schema": "Payment",
       "description": "Payment history records."
+<<<<<<< HEAD
+=======
+    },
+    "/mora_sync_history/{syncId}": {
+      "schema": "MoraSyncHistory",
+      "description": "Historical log of mora status syncs."
+>>>>>>> 2d692e6 (inicio)
     }
   }
 }

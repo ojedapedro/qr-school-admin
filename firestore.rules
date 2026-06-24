@@ -91,26 +91,25 @@ service cloud.firestore {
              data.date is string &&
              data.recordedBy is string;
     }
-
-    // Rules for Users collection
+    function isValidMoraSyncHistory(data) {
+      return data.keys().hasAll(['timestamp', 'syncedBy', 'moraStudentsCount', 'moraStudents']) &&
+             data.timestamp is string &&
+             data.syncedBy is string &&
+             data.moraStudentsCount is number &&
+             data.moraStudents is list;
+    }
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow update: if isAdmin() && isValidUser(request.resource.data);
     }
 
-    // Rules for Students collection
-    match /students/{studentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidStudent(request.resource.data);
-      allow update: if isAdmin() && isValidStudent(request.resource.data);
-      allow delete: if isAdmin();
+    // Rules for MoraSyncHistory collection
+    match /mora_sync_history/{syncId} {
+      allow read: if isAuthenticated() && isAdmin();
+      allow create: if isAdmin() && isValidMoraSyncHistory(request.resource.data);
+      allow update, delete: if false;
     }
-
-    // Rules for Attendance collection
-    match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow create: if isTeacher() && isValidAttendance(request.resource.data);
       allow update: if isAdmin() && isValidAttendance(request.resource.data);
       allow delete: if isAdmin();
     }
@@ -123,6 +122,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+<<<<<<< HEAD
+=======
+    // Rules for MoraSyncHistory collection
+    match /mora_sync_history/{syncId} {
+      allow read: if isAuthenticated() && isAdmin();
+      allow create: if isAdmin() && isValidMoraSyncHistory(request.resource.data);
+      allow update, delete: if false;
+    }
+
+>>>>>>> 2d692e6 (inicio)
     // Rule for connection testing
     match /test/connection {
       allow read: if true;

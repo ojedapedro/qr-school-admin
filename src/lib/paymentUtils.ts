@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Student, PaymentRecord } from '../types';
 import { format, startOfMonth, subMonths, isAfter, setDate } from 'date-fns';
@@ -9,7 +9,7 @@ import { es } from 'date-fns/locale';
  * Fee: $50 monthly
  * Due Date: 30th of each month
  */
-export async function syncAllStudentsPaymentStatus() {
+export async function syncAllStudentsPaymentStatus(syncedBy: string = 'Admin') {
   try {
     const now = new Date();
     const currentMonthStr = format(now, 'MMMM yyyy', { locale: es });
@@ -70,6 +70,14 @@ export async function syncAllStudentsPaymentStatus() {
         }
       }
     }
+
+    // Save to historical sync log
+    await addDoc(collection(db, 'mora_sync_history'), {
+      timestamp: now.toISOString(),
+      syncedBy,
+      moraStudentsCount: studentsInMoraPrevMonth.length,
+      moraStudents: studentsInMoraPrevMonth
+    });
     
     return { success: true, moraStudents: studentsInMoraPrevMonth };
   } catch (error) {

@@ -15,7 +15,57 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
   const [isManualMode, setIsManualMode] = useState(false);
   const [availableCameras, setAvailableCameras] = useState<any[]>([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+  );
   const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  // Request notification permissions on mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          setNotificationPermission(permission);
+        });
+      }
+    }
+  }, []);
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        new Notification('🔔 Notificaciones de QR School', {
+          body: '¡Excelente! Ahora recibirás alertas en tiempo real al detectar alumnos con mora.',
+          icon: 'https://i.ibb.co/LzLvsQWf/Logotipo-sofisticado-de-QR-School-con-conos-educativos.png'
+        });
+      }
+    }
+  };
+
+  const triggerMoraNotification = (student: Student) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const title = `🚨 ALERTA: Acceso Denegado - Mora`;
+        const notification = new Notification(title, {
+          body: `El alumno ${student.name} (${student.grade}) intentó ingresar, pero está en estado de MORA.`,
+          icon: 'https://i.ibb.co/LzLvsQWf/Logotipo-sofisticado-de-QR-School-con-conos-educativos.png',
+          tag: `mora-${student.id}-${Date.now()}`,
+          requireInteraction: true,
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          onNavigateToPayments();
+          notification.close();
+        };
+      } catch (err) {
+        console.error("Error triggering native browser notification:", err);
+      }
+    }
+  };
 
   // Audio and Haptic feedback helper
   const playFeedback = (type: 'success' | 'error') => {
@@ -179,6 +229,7 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
       // 2. Check payment status
       if (studentData.paymentStatus === 'Mora') {
         playFeedback('error');
+        triggerMoraNotification(studentData);
         setScanResult({ 
           success: false, 
           message: "ACCESO DENEGADO: Pendiente por Pago", 
@@ -265,11 +316,40 @@ export function QRScanner({ onNavigateToPayments }: { onNavigateToPayments: () =
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
       <div className="text-center space-y-3">
         <h2 className="text-3xl font-black tracking-tight">Escáner de Asistencia</h2>
         <p className="text-brand-text-muted px-4">Escanea el carnet del alumno para validar su entrada a la institución</p>
       </div>
+
+      {/* Browser Notification Status Indicator */}
+      {typeof window !== 'undefined' && 'Notification' in window && notificationPermission !== 'granted' && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md p-4 bg-brand-accent/10 border border-brand-accent/20 rounded-2xl flex items-center justify-between gap-4 text-xs"
+        >
+          <div className="flex items-center gap-2.5 text-brand-accent">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-accent"></span>
+            </span>
+            <p className="font-bold leading-tight text-white/90">
+              {notificationPermission === 'default' 
+                ? 'Activa las notificaciones para recibir alertas de mora en tiempo real.' 
+                : 'Notificaciones bloqueadas. Por favor, permítelas desde la barra de dirección.'}
+            </p>
+          </div>
+          {notificationPermission === 'default' && (
+            <button
+              onClick={requestNotificationPermission}
+              className="bg-brand-accent hover:bg-brand-accent/80 text-white font-black px-4 py-2 rounded-xl text-[10px] uppercase tracking-wider transition-all shrink-0 active:scale-95"
+            >
+              Activar
+            </button>
+          )}
+        </motion.div>
+      )}
 
       <div className="w-full max-w-md glass-card overflow-hidden border-white/5 relative">
         {/* Mobile Instructions Overlay */}

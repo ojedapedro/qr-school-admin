@@ -50,15 +50,15 @@ export function Auth() {
               <div className="absolute w-80 h-80 border border-white/5 rounded-full animate-spin-slow" />
             </div>
 
-            {/* Soccer Player Image */}
+            {/* Logo Image */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="relative z-10"
             >
               <img 
-                src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&q=80&w=800" 
-                alt="Young Soccer Player" 
+                src="https://i.ibb.co/LzLvsQWf/Logotipo-sofisticado-de-QR-School-con-conos-educativos.png" 
+                alt="Logotipo de QR School" 
                 className="h-[500px] object-contain drop-shadow-2xl"
                 referrerPolicy="no-referrer"
               />
